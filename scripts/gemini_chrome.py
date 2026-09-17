@@ -23,6 +23,17 @@ CHROME_FLAGS = (
 )
 
 
+def configure_console() -> None:
+    """Use deterministic UTF-8 output across Windows console code pages."""
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if callable(reconfigure):
+            reconfigure(encoding="utf-8", errors="replace")
+
+
+configure_console()
+
+
 def require_windows() -> None:
     if os.name != "nt":
         raise RuntimeError("该工具仅支持 Windows。")
