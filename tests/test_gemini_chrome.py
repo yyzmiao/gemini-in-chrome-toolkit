@@ -83,6 +83,14 @@ class ConfigurationTests(unittest.TestCase):
         self.assertEqual(self.local_state.read_bytes(), original_local_state)
         self.assertEqual(self.preferences.read_bytes(), original_preferences)
 
+    def test_launcher_forces_new_chrome_process_with_expected_flags(self) -> None:
+        content = gemini_chrome.launcher_content(self.chrome)
+
+        self.assertIn("taskkill /IM chrome.exe /F", content)
+        self.assertIn("--variations-override-country=us", content)
+        self.assertIn("--disable-features=GlicCountryFiltering", content)
+        self.assertIn(str(self.chrome), content)
+
 
 if __name__ == "__main__":
     unittest.main()

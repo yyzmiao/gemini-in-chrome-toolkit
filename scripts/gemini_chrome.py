@@ -21,6 +21,8 @@ CHROME_FLAGS = (
     "--variations-override-country=us",
     "--disable-features=GlicCountryFiltering",
 )
+SHORTCUT_NAME = "Chrome - Gemini US.lnk"
+LAUNCHER_NAME = "launch_gemini_chrome.cmd"
 
 
 def configure_console() -> None:
@@ -71,6 +73,81 @@ def backup_root() -> Path:
     documents = home / "Documents"
     base = documents if documents.exists() else home
     return base / "GeminiInChromeToolkit" / "backups"
+
+
+def toolkit_data_dir() -> Path:
+    local_app_data = os.environ.get("LOCALAPPDATA")
+    if not local_app_data:
+        raise RuntimeError("未找到 LOCALAPPDATA 环境变量。")
+    return Path(local_app_data) / "GeminiInChromeToolkit"
+
+
+def launcher_content(executable: Path) -> str:
+    return "\r\n".join(
+        [
+            "@echo off",
+            "taskkill /IM chrome.exe /F >nul 2>&1",
+            "for /L %%G in (1,1,20) do (",
+            '  tasklist /FI "IMAGENAME eq chrome.exe" /NH | find /I "chrome.exe" >nul',
+            "  if errorlevel 1 goto launch",
+            "  >nul 2>&1 ping 127.0.0.1 -n 2",
+            ")",
+            ":launch",
+            f'start "" "{executable}" {" ".join(CHROME_FLAGS)}',
+            "",
+        ]
+    )
+
+
+def powershell_literal(value: str) -> str:
+    return "'" + value.replace("'", "''") + "'"
+
+
+def create_shortcut(executable: Path) -> Path:
+    data_directory = toolkit_data_dir()
+    data_directory.mkdir(parents=True, exist_ok=True)
+    launcher = data_directory / LAUNCHER_NAME
+    launcher.write_text(launcher_content(executable), encoding="utf-8", newline="")
+
+    script = "; ".join(
+        [
+            "$shell = New-Object -ComObject WScript.Shell",
+            "$desktop = $shell.SpecialFolders.Item('Desktop')",
+            f"$link = $shell.CreateShortcut((Join-Path $desktop {powershell_literal(SHORTCUT_NAME)}))",
+            f"$link.TargetPath = {powershell_literal(str(launcher))}",
+            f"$link.WorkingDirectory = {powershell_literal(str(executable.parent))}",
+            f"$link.IconLocation = {powershell_literal(str(executable) + ',0')}",
+            "$link.Description = 'Start Chrome with Gemini diagnostic settings'",
+            "$link.Save()",
+        ]
+    )
+    subprocess.run(
+        ["powershell.exe", "-NoProfile", "-Command", script],
+        check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+    )
+    return launcher
+
+
+def remove_shortcut() -> None:
+    launcher = toolkit_data_dir() / LAUNCHER_NAME
+    script = "; ".join(
+        [
+            "$shell = New-Object -ComObject WScript.Shell",
+            "$desktop = $shell.SpecialFolders.Item('Desktop')",
+            f"$shortcut = Join-Path $desktop {powershell_literal(SHORTCUT_NAME)}",
+            "if (Test-Path -LiteralPath $shortcut) { Remove-Item -LiteralPath $shortcut -Force }",
+        ]
+    )
+    subprocess.run(
+        ["powershell.exe", "-NoProfile", "-Command", script],
+        check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+    )
+    launcher.unlink(missing_ok=True)
+    print(f"桌面快捷方式和启动器已删除：{SHORTCUT_NAME}")
 
 
 def preference_files(data_dir: Path) -> list[Path]:
@@ -257,9 +334,13 @@ def enable(assume_yes: bool, no_launch: bool) -> None:
     for preferences in profiles:
         eligibility_changes += configure_preferences(preferences)
 
+    launcher = create_shortcut(executable)
+
     print(f"配置已写入，备份目录：{backup}")
     print(f"已处理配置文件：{len(profiles) + 1}")
     print(f"已更新现有 is_glic_eligible 字段：{eligibility_changes}")
+    print(f"桌面快捷方式已创建：{SHORTCUT_NAME}")
+    print(f"快捷方式启动器：{launcher}")
     if not no_launch:
         subprocess.Popen([str(executable), *CHROME_FLAGS], close_fds=True)
         print("Chrome 已使用诊断参数启动。")
@@ -319,9 +400,18 @@ def menu() -> str:
     print("1. 启用并启动 Chrome")
     print("2. 恢复最新备份")
     print("3. 查看状态")
+    print("4. 创建或刷新桌面快捷方式")
+    print("5. 删除桌面快捷方式")
     print("0. 退出")
     choice = input("请选择操作：").strip()
-    return {"1": "enable", "2": "restore", "3": "status", "0": "exit"}.get(choice, "")
+    return {
+        "1": "enable",
+        "2": "restore",
+        "3": "status",
+        "4": "shortcut",
+        "5": "remove-shortcut",
+        "0": "exit",
+    }.get(choice, "")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -337,6 +427,8 @@ def build_parser() -> argparse.ArgumentParser:
     restore_parser.add_argument("--yes", action="store_true", help="跳过关闭 Chrome 的确认")
 
     subparsers.add_parser("status", help="显示当前配置和备份状态")
+    subparsers.add_parser("shortcut", help="创建或刷新桌面快捷方式")
+    subparsers.add_parser("remove-shortcut", help="删除桌面快捷方式和启动器")
     return parser
 
 
@@ -354,11 +446,23 @@ def main() -> int:
             restore(getattr(args, "backup", None), getattr(args, "yes", False))
         elif action == "status":
             status()
+        elif action == "shortcut":
+            launcher = create_shortcut(chrome_executable())
+            print(f"桌面快捷方式已创建：{SHORTCUT_NAME}")
+            print(f"快捷方式启动器：{launcher}")
+        elif action == "remove-shortcut":
+            remove_shortcut()
         else:
             parser.print_help()
             return 2
         return 0
-    except (OSError, ValueError, RuntimeError, json.JSONDecodeError) as error:
+    except (
+        OSError,
+        ValueError,
+        RuntimeError,
+        json.JSONDecodeError,
+        subprocess.SubprocessError,
+    ) as error:
         print(f"错误：{error}", file=sys.stderr)
         return 1
 

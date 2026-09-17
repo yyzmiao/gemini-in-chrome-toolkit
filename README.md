@@ -10,6 +10,7 @@
 - 写入 Variations 国家、长期一致性国家和界面语言设置。
 - 更新配置中已经存在的 `is_glic_eligible` 字段。
 - 使用国家覆盖和国家过滤诊断参数启动 Chrome。
+- 自动创建可强制重启 Chrome 的桌面快捷方式。
 - 支持恢复最新备份或指定备份。
 - 支持只读状态检查。
 - 不删除注册表策略，不修改 Chrome 企业管理策略。
@@ -75,6 +76,8 @@ pwsh -NoProfile -File .\scripts\gemini_chrome.ps1
 1. 启用并启动 Chrome
 2. 恢复最新备份
 3. 查看状态
+4. 创建或刷新桌面快捷方式
+5. 删除桌面快捷方式
 0. 退出
 ```
 
@@ -92,6 +95,12 @@ pwsh -NoProfile -File .\scripts\gemini_chrome.ps1 -Action Restore -Backup "C:\pa
 
 # 查看状态
 pwsh -NoProfile -File .\scripts\gemini_chrome.ps1 -Action Status
+
+# 创建或刷新桌面快捷方式
+pwsh -NoProfile -File .\scripts\gemini_chrome.ps1 -Action Shortcut
+
+# 删除桌面快捷方式
+pwsh -NoProfile -File .\scripts\gemini_chrome.ps1 -Action RemoveShortcut
 ```
 
 自动化环境可使用 `-Yes` 跳过关闭 Chrome 前的确认。使用 `-NoLaunch` 可在写入配置后不启动 Chrome。
@@ -118,9 +127,72 @@ python .\scripts\gemini_chrome.py restore --backup "C:\path\to\backup"
 
 # 查看状态
 python .\scripts\gemini_chrome.py status
+
+# 创建或刷新桌面快捷方式
+python .\scripts\gemini_chrome.py shortcut
+
+# 删除桌面快捷方式
+python .\scripts\gemini_chrome.py remove-shortcut
 ```
 
 自动化环境可使用 `--yes` 跳过关闭 Chrome 前的确认。使用 `--no-launch` 可在写入配置后不启动 Chrome。
+
+## 桌面快捷方式
+
+执行启用操作后，桌面会自动生成：
+
+```text
+Chrome - Gemini US.lnk
+```
+
+快捷方式调用的稳定启动器保存在：
+
+```text
+%LOCALAPPDATA%\GeminiInChromeToolkit\launch_gemini_chrome.cmd
+```
+
+### 日常使用
+
+1. 保存 Chrome 中尚未提交的表单、在线文档和下载任务。
+2. 双击桌面的 `Chrome - Gemini US`。
+3. 启动器强制结束全部 Chrome 进程，并等待进程退出。
+4. Chrome 使用国家覆盖和国家过滤诊断参数重新启动。
+5. 打开 `chrome://version` 检查命令行参数。
+6. 打开 `chrome://glic/internals` 检查账号、语言、地区和服务器状态。
+
+快捷方式必须先结束已有 Chrome 主进程。直接打开带参数的新窗口无法保证参数生效，因为现有主进程可能接管新窗口。
+
+### 单独创建快捷方式
+
+PowerShell：
+
+```powershell
+pwsh -NoProfile -File .\scripts\gemini_chrome.ps1 -Action Shortcut
+```
+
+Python：
+
+```powershell
+python .\scripts\gemini_chrome.py shortcut
+```
+
+该操作不修改 Chrome 配置，也不关闭 Chrome，只创建或刷新桌面快捷方式与稳定启动器。
+
+### 删除快捷方式
+
+PowerShell：
+
+```powershell
+pwsh -NoProfile -File .\scripts\gemini_chrome.ps1 -Action RemoveShortcut
+```
+
+Python：
+
+```powershell
+python .\scripts\gemini_chrome.py remove-shortcut
+```
+
+删除操作只移除桌面快捷方式和稳定启动器，不删除配置备份，也不恢复 Chrome 配置。恢复配置需要单独执行 `Restore` 或 `restore`。
 
 ## 启用操作
 
@@ -134,7 +206,8 @@ python .\scripts\gemini_chrome.py status
 6. 将 Chrome 界面区域设置为 `en-US`。
 7. 将 Profile 接受语言设置为 `en-US,en`。
 8. 将配置中已经存在的 `is_glic_eligible` 字段设置为 `true`。
-9. 使用以下诊断参数启动 Chrome：
+9. 创建或刷新桌面快捷方式。
+10. 使用以下诊断参数启动 Chrome：
 
 ```text
 --variations-override-country=us

@@ -2,7 +2,7 @@
 
 [CmdletBinding()]
 param(
-    [ValidateSet("Menu", "Enable", "Restore", "Status")]
+    [ValidateSet("Menu", "Enable", "Restore", "Status", "Shortcut", "RemoveShortcut")]
     [string]$Action = "Menu",
     [string]$Backup,
     [switch]$Yes,
@@ -16,6 +16,8 @@ $ChromeFlags = @(
     "--variations-override-country=us",
     "--disable-features=GlicCountryFiltering"
 )
+$ShortcutName = "Chrome - Gemini US.lnk"
+$LauncherName = "launch_gemini_chrome.cmd"
 
 function Assert-Windows {
     if ($env:OS -ne "Windows_NT") {
@@ -56,6 +58,61 @@ function Get-BackupRoot {
         $Documents = $HOME
     }
     return Join-Path $Documents "GeminiInChromeToolkit\backups"
+}
+
+function Get-ToolkitDataDirectory {
+    if (-not $env:LOCALAPPDATA) {
+        throw "未找到 LOCALAPPDATA 环境变量。"
+    }
+    return Join-Path $env:LOCALAPPDATA "GeminiInChromeToolkit"
+}
+
+function New-DesktopShortcut([string]$ChromePath) {
+    $DataDirectory = Get-ToolkitDataDirectory
+    New-Item -ItemType Directory -Path $DataDirectory -Force | Out-Null
+    $LauncherPath = Join-Path $DataDirectory $LauncherName
+    $LauncherLines = @(
+        "@echo off"
+        "taskkill /IM chrome.exe /F >nul 2>&1"
+        "for /L %%G in (1,1,20) do ("
+        '  tasklist /FI "IMAGENAME eq chrome.exe" /NH | find /I "chrome.exe" >nul'
+        "  if errorlevel 1 goto launch"
+        "  >nul 2>&1 ping 127.0.0.1 -n 2"
+        ")"
+        ":launch"
+        ('start "" "{0}" {1}' -f $ChromePath, ($ChromeFlags -join " "))
+        ""
+    )
+    [IO.File]::WriteAllText(
+        $LauncherPath,
+        ($LauncherLines -join "`r`n"),
+        [Text.UTF8Encoding]::new($false)
+    )
+
+    $Shell = New-Object -ComObject WScript.Shell
+    $Desktop = $Shell.SpecialFolders.Item("Desktop")
+    $ShortcutPath = Join-Path $Desktop $ShortcutName
+    $Shortcut = $Shell.CreateShortcut($ShortcutPath)
+    $Shortcut.TargetPath = $LauncherPath
+    $Shortcut.WorkingDirectory = Split-Path $ChromePath
+    $Shortcut.IconLocation = "$ChromePath,0"
+    $Shortcut.Description = "Start Chrome with Gemini diagnostic settings"
+    $Shortcut.Save()
+    return $LauncherPath
+}
+
+function Remove-DesktopShortcut {
+    $Shell = New-Object -ComObject WScript.Shell
+    $Desktop = $Shell.SpecialFolders.Item("Desktop")
+    $ShortcutPath = Join-Path $Desktop $ShortcutName
+    $LauncherPath = Join-Path (Get-ToolkitDataDirectory) $LauncherName
+    if (Test-Path -LiteralPath $ShortcutPath) {
+        Remove-Item -LiteralPath $ShortcutPath -Force
+    }
+    if (Test-Path -LiteralPath $LauncherPath) {
+        Remove-Item -LiteralPath $LauncherPath -Force
+    }
+    Write-Host "桌面快捷方式和启动器已删除：$ShortcutName"
 }
 
 function Get-PreferenceFiles([string]$UserData) {
@@ -233,9 +290,12 @@ function Invoke-Enable {
     foreach ($Preferences in $Profiles) {
         $Changed += Set-Preferences $Preferences.FullName
     }
+    $LauncherPath = New-DesktopShortcut $ChromePath
     Write-Host "配置已写入，备份目录：$BackupPath"
     Write-Host "已处理配置文件：$($Profiles.Count + 1)"
     Write-Host "已更新现有 is_glic_eligible 字段：$Changed"
+    Write-Host "桌面快捷方式已创建：$ShortcutName"
+    Write-Host "快捷方式启动器：$LauncherPath"
     if (-not $NoLaunch) {
         Start-Process -FilePath $ChromePath -ArgumentList $ChromeFlags
         Write-Host "Chrome 已使用诊断参数启动。"
@@ -286,11 +346,15 @@ function Show-Menu {
     Write-Host "1. 启用并启动 Chrome"
     Write-Host "2. 恢复最新备份"
     Write-Host "3. 查看状态"
+    Write-Host "4. 创建或刷新桌面快捷方式"
+    Write-Host "5. 删除桌面快捷方式"
     Write-Host "0. 退出"
     switch (Read-Host "请选择操作") {
         "1" { return "Enable" }
         "2" { return "Restore" }
         "3" { return "Status" }
+        "4" { return "Shortcut" }
+        "5" { return "RemoveShortcut" }
         "0" { return "Exit" }
         default { throw "无效选项。" }
     }
@@ -305,6 +369,12 @@ try {
         "Enable" { Invoke-Enable }
         "Restore" { Invoke-Restore }
         "Status" { Show-Status }
+        "Shortcut" {
+            $LauncherPath = New-DesktopShortcut (Get-ChromeExecutable)
+            Write-Host "桌面快捷方式已创建：$ShortcutName"
+            Write-Host "快捷方式启动器：$LauncherPath"
+        }
+        "RemoveShortcut" { Remove-DesktopShortcut }
         "Exit" { exit 0 }
     }
 }
