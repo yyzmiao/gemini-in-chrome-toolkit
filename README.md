@@ -1,6 +1,79 @@
 # Gemini in Chrome Toolkit
 
-面向 Windows 的 Gemini in Chrome 配置、诊断与恢复工具。仓库提供功能等价的 Python 脚本和 PowerShell 脚本，用于备份 Chrome 配置、写入地区与语言设置、使用诊断参数启动 Chrome，并从备份恢复原始配置。
+Windows 上的 Gemini in Chrome 一键配置、快捷启动和恢复工具。
+
+## 直接开始
+
+### 第一步 下载
+
+点击 [Download ZIP](https://github.com/yyzmiao/gemini-in-chrome-toolkit/archive/refs/heads/main.zip)，下载后解压到任意文件夹。
+
+### 第二步 启动
+
+双击解压目录中的：
+
+```text
+start.cmd
+```
+
+工具会优先使用 PowerShell 7，没有 PowerShell 7 时自动尝试 Python。
+
+### 第三步 启用
+
+在菜单中输入：
+
+```text
+1
+```
+
+看到关闭 Chrome 的提示后，先保存网页表单、在线文档和下载任务，再输入大写 `YES`。
+
+脚本将自动完成：
+
+1. 备份 Chrome 配置。
+2. 写入地区和语言设置。
+3. 创建桌面快捷方式 `Chrome - Gemini US`。
+4. 使用诊断参数重新启动 Chrome。
+
+### 第四步 日常使用
+
+以后需要启动时，先保存 Chrome 中未提交的内容，再双击桌面的：
+
+```text
+Chrome - Gemini US
+```
+
+快捷方式会关闭已有 Chrome 进程，然后带正确参数重新启动。普通 Chrome 图标不会自动附加这些参数。
+
+## 需要恢复时
+
+再次双击 `start.cmd`，在菜单中输入：
+
+```text
+2
+```
+
+工具会恢复最近一次启用前保存的配置。恢复配置不会自动删除桌面快捷方式；需要删除时，在菜单中输入 `5`。
+
+## 无法启动时
+
+电脑需要安装以下任一运行环境：
+
+- [PowerShell 7.4 或更高版本](https://learn.microsoft.com/powershell/scripting/install/installing-powershell-on-windows)
+- [Python 3.10 或更高版本](https://www.python.org/downloads/windows/)
+
+安装后重新双击 `start.cmd`。
+
+## 使用前须知
+
+- Gemini in Chrome 仍需符合 Google 的账号、地区、语言和服务器开放条件。
+- 工具不能授予服务器端资格，也不会绕过企业管理策略。
+- 启用和快捷启动都会强制关闭 Chrome，未保存内容可能丢失。
+- 每次启用都会先创建独立备份。
+
+<details>
+<summary><strong>展开完整技术说明和命令行用法</strong></summary>
+
 
 ## 功能范围
 
@@ -299,6 +372,7 @@ Chrome 会根据账号和服务器状态重新计算部分资格字段。本地 
 │   └── test_gemini_chrome.py
 ├── .gitignore
 ├── LICENSE
+├── start.cmd
 └── README.md
 ```
 
@@ -314,6 +388,8 @@ Chrome 会根据账号和服务器状态重新计算部分资格字段。本地 
 - [Google Chrome 帮助：Chrome 中的 Gemini 支持范围](https://support.google.com/chrome/answer/17140089?hl=zh-Hans)
 - [Chromium：Variations 启动参数](https://chromium.googlesource.com/chromium/src/+/main/components/variations/variations_switches.cc)
 - [Chromium：Gemini in Chrome 启用条件](https://chromium.googlesource.com/chromium/src/+/main/chrome/browser/glic/public/glic_enabling.cc)
+
+</details>
 
 ## 许可证
 

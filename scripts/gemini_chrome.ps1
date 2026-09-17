@@ -2,7 +2,7 @@
 
 [CmdletBinding()]
 param(
-    [ValidateSet("Menu", "Enable", "Restore", "Status", "Shortcut", "RemoveShortcut")]
+    [ValidateSet("Menu", "Enable", "Restore", "Status", "Shortcut", "RemoveShortcut", "Exit")]
     [string]$Action = "Menu",
     [string]$Backup,
     [switch]$Yes,
@@ -349,7 +349,7 @@ function Show-Menu {
     Write-Host "4. 创建或刷新桌面快捷方式"
     Write-Host "5. 删除桌面快捷方式"
     Write-Host "0. 退出"
-    switch (Read-Host "请选择操作") {
+    switch ((Read-Host "请选择操作").Trim()) {
         "1" { return "Enable" }
         "2" { return "Restore" }
         "3" { return "Status" }
